@@ -139,6 +139,10 @@ async fn handle_processing_key(
         KeyCode::Char(c) => {
             if key.modifiers.contains(KeyModifiers::CONTROL) && c == 'h' {
                 delete_prev_word(app);
+            } else if c == '\n' {
+                // Handle newline from Shift+Enter
+                app.input.insert(app.cursor_pos, '\n');
+                app.cursor_pos += 1;
             } else if !key.modifiers.contains(KeyModifiers::CONTROL) {
                 app.input.insert(app.cursor_pos, c);
                 app.cursor_pos += 1;
@@ -227,6 +231,10 @@ async fn handle_normal_key(
         KeyCode::Char(c) => {
             if key.modifiers.contains(KeyModifiers::CONTROL) && c == 'h' {
                 delete_prev_word(app);
+            } else if c == '\n' {
+                // Handle newline from Shift+Enter
+                app.input.insert(app.cursor_pos, '\n');
+                app.cursor_pos += 1;
             } else if !key.modifiers.contains(KeyModifiers::CONTROL)
                 && !key.modifiers.contains(KeyModifiers::ALT)
             {
