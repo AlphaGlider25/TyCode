@@ -27,7 +27,7 @@ pub enum ChatMessage {
 
 // ── App Mode ─────────────────────────────────────────────────────────────────
 
-pub const PROVIDERS: &[&str] = &["anthropic", "openai", "ollama", "gemini", "airllm"];
+pub const PROVIDERS: &[&str] = &["dev", "anthropic", "openai", "ollama", "gemini", "airllm"];
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppMode {

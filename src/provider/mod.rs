@@ -1,4 +1,5 @@
 pub mod anthropic;
+pub mod dev;
 pub mod gemini;
 pub mod ollama;
 pub mod openai;
@@ -158,6 +159,7 @@ pub fn create_provider(config: &Config) -> Result<Box<dyn Provider>> {
             &config.anthropic_api_key,
             config.max_tokens,
         ))),
+        "dev" => Ok(Box::new(dev::DevProvider)),
         "openai" => Ok(Box::new(openai::OpenAIProvider::new(
             &config.model,
             &config.openai_api_key,
@@ -173,6 +175,6 @@ pub fn create_provider(config: &Config) -> Result<Box<dyn Provider>> {
             &config.google_api_key,
             config.max_tokens,
         ))),
-        other => anyhow::bail!("Unknown provider '{other}'. Options: anthropic, openai, ollama, gemini"),
+        other => anyhow::bail!("Unknown provider '{other}'. Options: anthropic, dev, openai, ollama, gemini"),
     }
 }
