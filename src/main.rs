@@ -20,6 +20,7 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use tokio::sync::mpsc;
 
+use chrono::Local;
 use crate::config::Config;
 use crate::tui::app::{App, AppMode, ChatMessage};
 use crate::tui::{input, ui};
@@ -141,7 +142,7 @@ async fn run_app(
         // ── Process queued messages after task completes ──────────────────
         if matches!(app.mode, AppMode::Normal) && !app.input_queue.is_empty() {
             if let Some(prompt) = app.input_queue.pop_front() {
-                app.messages.push(ChatMessage::User(prompt.clone()));
+                app.messages.push(ChatMessage::User { text: prompt.clone(), timestamp: Local::now() });
                 app.mode = AppMode::Processing;
                 app.scroll_to_bottom();
                 let _ = user_tx.send(prompt);

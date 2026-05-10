@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use chrono::Local;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 use tokio::sync::mpsc;
 
@@ -121,7 +122,13 @@ async fn handle_processing_key(
             app.set_status("Queue cleared");
         }
         KeyCode::Enter => {
-            if key.modifiers.contains(KeyModifiers::SHIFT) || key.modifiers.contains(KeyModifiers::ALT) {
+            if key.modifiers.contains(KeyModifiers::CONTROL) {
+                if let Some(idx) = app.selected_message {
+                    if let Some(ChatMessage::ToolCall { expanded, .. }) = app.messages.get_mut(idx) {
+                        *expanded = !*expanded;
+                    }
+                }
+            } else if key.modifiers.contains(KeyModifiers::SHIFT) || key.modifiers.contains(KeyModifiers::ALT) {
                 // Shift+Enter or Alt+Enter: insert newline
                 app.input.insert(app.cursor_pos, '\n');
                 app.cursor_pos += 1;
@@ -196,13 +203,6 @@ async fn handle_processing_key(
                 Some(i) => Some(i + 1),
             };
         }
-        KeyCode::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            if let Some(idx) = app.selected_message {
-                if let Some(ChatMessage::ToolCall { expanded, .. }) = app.messages.get_mut(idx) {
-                    *expanded = !*expanded;
-                }
-            }
-        }
         KeyCode::Up => {
             app.history_up();
         }
@@ -227,6 +227,16 @@ async fn handle_normal_key(
 ) -> bool {
     match key.code {
         KeyCode::Enter => {
+            if key.modifiers.contains(KeyModifiers::CONTROL) {
+                // Ctrl+Enter: toggle expand on selected tool call
+                if let Some(idx) = app.selected_message {
+                    if let Some(ChatMessage::ToolCall { expanded, .. }) = app.messages.get_mut(idx) {
+                        *expanded = !*expanded;
+                    }
+                }
+                return true;
+            }
+
             if key.modifiers.contains(KeyModifiers::SHIFT) || key.modifiers.contains(KeyModifiers::ALT) {
                 // Shift+Enter or Alt+Enter inserts a newline without submitting.
                 app.input.insert(app.cursor_pos, '\n');
@@ -247,7 +257,7 @@ async fn handle_normal_key(
             if input.starts_with('/') {
                 handle_command(app, &input).await;
             } else {
-                app.messages.push(ChatMessage::User(input.clone()));
+                app.messages.push(ChatMessage::User { text: input.clone(), timestamp: Local::now() });
                 app.mode = AppMode::Processing;
                 app.auto_scroll = true;
                 app.scroll_to_bottom();
@@ -334,14 +344,6 @@ async fn handle_normal_key(
                 Some(i) if i + 1 >= len => None,
                 Some(i) => Some(i + 1),
             };
-            true
-        }
-        KeyCode::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => {
-            if let Some(idx) = app.selected_message {
-                if let Some(ChatMessage::ToolCall { expanded, .. }) = app.messages.get_mut(idx) {
-                    *expanded = !*expanded;
-                }
-            }
             true
         }
         KeyCode::Up => {
@@ -445,8 +447,9 @@ async fn handle_command(app: &mut App, cmd: &str) {
         "/copy" => {
             let chat_text = app.messages.iter().rev().take(50).rev().map(|m| {
                 match m {
-                    ChatMessage::User(s) => format!("User: {}", s),
-                    ChatMessage::AssistantText(s) | ChatMessage::AssistantLive(s) => format!("Assistant: {}", s),
+                    ChatMessage::User { text, .. } => format!("User: {}", text),
+                    ChatMessage::AssistantText { text, model, .. } => format!("Assistant ({}): {}", model, text),
+                    ChatMessage::AssistantLive(s) => format!("Assistant: {}", s),
                     ChatMessage::System(s) => format!("System: {}", s),
                     ChatMessage::Error(s) => format!("Error: {}", s),
                     ChatMessage::ToolCall { name, input_summary, success, output, .. } => {

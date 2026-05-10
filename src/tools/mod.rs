@@ -4,6 +4,8 @@ pub mod process;
 pub mod search;
 pub mod shell;
 pub mod system;
+pub mod todo;
+pub mod web;
 
 pub(crate) fn shellexpand(path: &str) -> String {
     if path.starts_with('~') {
@@ -127,6 +129,18 @@ pub fn execute_tool(name: &str, input: &Value) -> ToolResult {
             &get_str("path"),
             get_u64("max_depth", 3) as usize,
         ),
+
+        // Web
+        "web_fetch" => web::web_fetch(
+            &get_str("url"),
+            get_u64("max_length", 32000) as usize,
+        ),
+
+        // Todo
+        "todo_write" => todo::todo_write(
+            input.get("todos").unwrap_or(&Value::Array(vec![])),
+        ),
+        "todo_read" => todo::todo_read(),
 
         _ => ToolResult::err(format!("Unknown tool: {name}")),
     }
@@ -426,6 +440,60 @@ pub fn all_tool_schemas() -> Vec<ToolSchema> {
                     }
                 },
                 "required": ["path"]
+            }),
+        },
+
+        // ── Web ─────────────────────────────────────────────────────────────
+        ToolSchema {
+            name: "web_fetch".into(),
+            description: "Fetch a URL and return its content as plain text. HTML is converted to readable text. Useful for documentation, APIs, and web resources.".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "URL to fetch"
+                    },
+                    "max_length": {
+                        "type": "integer",
+                        "description": "Maximum characters to return (default: 32000)"
+                    }
+                },
+                "required": ["url"]
+            }),
+        },
+
+        // ── Todo ────────────────────────────────────────────────────────────
+        ToolSchema {
+            name: "todo_write".into(),
+            description: "Create or replace the todo list. Use for complex multi-step tasks to track progress. Each item has content, status (pending/in_progress/done), and priority (high/medium/low).".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "todos": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "content":  { "type": "string", "description": "Task description" },
+                                "status":   { "type": "string", "description": "pending | in_progress | done" },
+                                "priority": { "type": "string", "description": "high | medium | low" }
+                            },
+                            "required": ["content"]
+                        },
+                        "description": "Array of todo items"
+                    }
+                },
+                "required": ["todos"]
+            }),
+        },
+        ToolSchema {
+            name: "todo_read".into(),
+            description: "Read the current todo list. Returns all tasks with their status and priority.".into(),
+            parameters: json!({
+                "type": "object",
+                "properties": {},
+                "required": []
             }),
         },
     ]

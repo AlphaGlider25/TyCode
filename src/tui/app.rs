@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use chrono::{DateTime, Local};
 use tokio::sync::{oneshot, Mutex};
 
 use crate::agent::{Agent, AgentEvent};
@@ -11,8 +12,8 @@ use crate::config::Config;
 
 #[derive(Debug, Clone)]
 pub enum ChatMessage {
-    User(String),
-    AssistantText(String),
+    User { text: String, timestamp: DateTime<Local> },
+    AssistantText { text: String, model: String, timestamp: DateTime<Local> },
     /// Live streaming response — replaced by AssistantText on TextDone.
     AssistantLive(String),
     ToolCall {
@@ -21,6 +22,7 @@ pub enum ChatMessage {
         success: Option<bool>,
         output: Option<String>,
         expanded: bool,
+        timestamp: DateTime<Local>,
     },
     System(String),
     Error(String),
@@ -175,6 +177,7 @@ pub struct App {
     pub scroll_offset: u16,
     pub auto_scroll: bool,
     pub selected_message: Option<usize>,
+    pub git_branch: Option<String>,
 
     // Input
     pub input: String,
@@ -212,6 +215,14 @@ impl App {
             .map(|p| p.display().to_string())
             .unwrap_or_else(|_| "~".into());
 
+        let git_branch = std::process::Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty() && s != "HEAD");
+
         Self {
             mode: AppMode::Normal,
             shared_agent: Arc::new(Mutex::new(Agent::new())),
@@ -222,6 +233,7 @@ impl App {
             scroll_offset: 0,
             auto_scroll: true,
             selected_message: None,
+            git_branch,
             input: String::new(),
             cursor_pos: 0,
             input_history: VecDeque::with_capacity(100),
@@ -245,8 +257,9 @@ impl App {
     /// Rough estimate of tokens in context (chars / 4).
     pub fn context_token_estimate(&self) -> usize {
         let chars: usize = self.messages.iter().map(|m| match m {
-            ChatMessage::User(s) | ChatMessage::AssistantText(s) | ChatMessage::AssistantLive(s)
-            | ChatMessage::System(s) | ChatMessage::Error(s) => s.len(),
+            ChatMessage::User { text, .. } => text.len(),
+            ChatMessage::AssistantText { text, .. } => text.len(),
+            ChatMessage::AssistantLive(s) | ChatMessage::System(s) | ChatMessage::Error(s) => s.len(),
             ChatMessage::ToolCall { input_summary, output, .. } => {
                 input_summary.len() + output.as_ref().map(|o| o.len()).unwrap_or(0)
             }
@@ -274,10 +287,14 @@ impl App {
                     self.scroll_to_bottom();
                 }
             }
-            AgentEvent::TextDone => {
-                // Convert live message to final text.
+            AgentEvent::TextDone { model } => {
+                // Convert live message to final text with model badge.
                 if let Some(ChatMessage::AssistantLive(text)) = self.messages.last().cloned() {
-                    *self.messages.last_mut().unwrap() = ChatMessage::AssistantText(text);
+                    *self.messages.last_mut().unwrap() = ChatMessage::AssistantText {
+                        text,
+                        model,
+                        timestamp: Local::now(),
+                    };
                 }
             }
             AgentEvent::ToolStart { name, input } => {
@@ -287,6 +304,7 @@ impl App {
                     success: None,
                     output: None,
                     expanded: false,
+                    timestamp: Local::now(),
                 });
                 if self.auto_scroll {
                     self.scroll_to_bottom();

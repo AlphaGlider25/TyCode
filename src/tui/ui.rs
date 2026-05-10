@@ -11,18 +11,40 @@ use unicode_width::UnicodeWidthStr;
 use super::app::{App, AppMode, ChatMessage, ConfirmState, ModelSelectState, ProviderSelectState, SettingsState};
 use super::markdown;
 
-// ── Colors ───────────────────────────────────────────────────────────────────
+// ── Color palette ────────────────────────────────────────────────────────────
 
-const USER_COLOR: Color = Color::Cyan;
-const TOOL_COLOR: Color = Color::Yellow;
-const TOOL_SUCCESS: Color = Color::Green;
-const TOOL_FAIL: Color = Color::Red;
-const ERROR_COLOR: Color = Color::Red;
-const SYSTEM_COLOR: Color = Color::DarkGray;
-const HEADER_BG: Color = Color::Rgb(30, 30, 50);
-const STATUS_BG: Color = Color::Rgb(30, 30, 50);
-const BORDER_COLOR: Color = Color::Rgb(80, 80, 100);
-const DIM: Color = Color::DarkGray;
+const BG_BASE: Color     = Color::Rgb(13, 13, 17);
+const BG_POPUP: Color    = Color::Rgb(18, 18, 28);
+
+const BORDER_DIM: Color    = Color::Rgb(45, 45, 65);
+const BORDER_ACCENT: Color = Color::Rgb(90, 60, 160);
+const BORDER_BRIGHT: Color = Color::Rgb(120, 90, 200);
+
+const TEXT_PRIMARY: Color   = Color::Rgb(220, 215, 235);
+const TEXT_SECONDARY: Color = Color::Rgb(140, 130, 170);
+const TEXT_MUTED: Color     = Color::Rgb(80, 75, 105);
+
+const ACCENT_PRIMARY: Color = Color::Rgb(160, 100, 240);
+const ACCENT_SOFT: Color    = Color::Rgb(100, 70, 180);
+const ACCENT_DIM: Color     = Color::Rgb(60, 40, 120);
+
+const SUCCESS: Color  = Color::Rgb(80, 200, 120);
+const ERROR_COLOR: Color = Color::Rgb(240, 80, 80);
+const INFO: Color     = Color::Rgb(80, 170, 240);
+
+const USER_COLOR: Color   = Color::Rgb(100, 200, 255);
+const TOOL_COLOR: Color   = Color::Rgb(240, 180, 60);
+const TOOL_SUCCESS: Color = SUCCESS;
+const TOOL_FAIL: Color    = ERROR_COLOR;
+
+// Legacy aliases kept for overlays
+const HEADER_BG: Color   = Color::Rgb(15, 13, 22);
+const STATUS_BG: Color   = Color::Rgb(15, 13, 22);
+const BORDER_COLOR: Color= BORDER_DIM;
+const DIM: Color         = TEXT_MUTED;
+const POPUP_BG: Color    = BG_POPUP;
+const POPUP_BORDER: Color= BORDER_ACCENT;
+const POPUP_TITLE: Color = Color::Rgb(180, 150, 255);
 
 // ── Main render ──────────────────────────────────────────────────────────────
 
@@ -74,39 +96,28 @@ pub fn render(f: &mut Frame, app: &mut App) {
 // ── Header ───────────────────────────────────────────────────────────────────
 
 fn render_header(f: &mut Frame, app: &App, area: Rect) {
-    let provider_info = app.config.provider_display();
-    let cwd_short = shorten_path(&app.cwd, (area.width as usize).saturating_sub(provider_info.len() + 20));
+    let model_info = app.config.provider_display();
+    let branch_str = app.git_branch.as_deref()
+        .map(|b| format!("  [{b}]"))
+        .unwrap_or_default();
+    let cwd_short = shorten_path(&app.cwd, (area.width as usize).saturating_sub(model_info.len() + branch_str.len() + 20));
+    let right_part = format!("{}{}  ", cwd_short, branch_str);
 
-    let tycode_width = " ◈ TyCode ".len();
-    let provider_width = format!(" {} ", provider_info).len();
-    let cwd_width = format!(" {} ", cwd_short).len();
-    let total_used = tycode_width + provider_width + cwd_width;
-    let padding = (area.width as usize).saturating_sub(total_used);
+    let badge = " ◈ TyCode ";
+    let mid   = format!("  {}  ", model_info);
+    let total = badge.len() + mid.len() + right_part.len();
+    let gap   = (area.width as usize).saturating_sub(total);
 
     let header = Line::from(vec![
-        Span::styled(
-            " ◈ TyCode ",
-            Style::default()
-                .fg(Color::White)
-                .bg(Color::Rgb(100, 60, 180))
-                .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!(" {} ", provider_info),
-            Style::default().fg(Color::Cyan).bg(HEADER_BG),
-        ),
-        Span::styled(
-            " ".repeat(padding),
-            Style::default().bg(HEADER_BG),
-        ),
-        Span::styled(
-            format!(" {} ", cwd_short),
-            Style::default().fg(DIM).bg(HEADER_BG),
-        ),
+        Span::styled(badge, Style::default().fg(Color::White).bg(ACCENT_PRIMARY).add_modifier(Modifier::BOLD)),
+        Span::styled(mid,   Style::default().fg(TEXT_SECONDARY).bg(HEADER_BG)),
+        Span::styled(" ".repeat(gap), Style::default().bg(HEADER_BG)),
+        Span::styled(cwd_short.to_string(), Style::default().fg(TEXT_MUTED).bg(HEADER_BG)),
+        Span::styled(branch_str, Style::default().fg(ACCENT_SOFT).bg(HEADER_BG)),
+        Span::styled("  ", Style::default().bg(HEADER_BG)),
     ]);
 
-    let header_widget = Paragraph::new(header).style(Style::default().bg(HEADER_BG));
-    f.render_widget(header_widget, area);
+    f.render_widget(Paragraph::new(header).style(Style::default().bg(HEADER_BG)), area);
 }
 
 // ── Chat area ────────────────────────────────────────────────────────────────
@@ -119,27 +130,36 @@ fn render_chat(f: &mut Frame, app: &mut App, area: Rect) {
         let is_selected = app.selected_message == Some(msg_idx);
 
         match msg {
-            ChatMessage::User(text) => {
+            ChatMessage::User { text, timestamp } => {
                 all_lines.push(Line::from(""));
+                let ts = timestamp.format("%H:%M").to_string();
+                let ts_pad = (area.width as usize).saturating_sub(8 + ts.len());
                 all_lines.push(Line::from(vec![
-                    Span::styled(
-                        "  You ",
-                        Style::default()
-                            .fg(Color::Black)
-                            .bg(USER_COLOR)
-                            .add_modifier(Modifier::BOLD),
-                    ),
+                    Span::styled("  ❯ ", Style::default().fg(ACCENT_PRIMARY)),
+                    Span::styled("You", Style::default().fg(USER_COLOR).add_modifier(Modifier::BOLD)),
+                    Span::styled(" ".repeat(ts_pad), Style::default()),
+                    Span::styled(ts, Style::default().fg(TEXT_MUTED)),
                 ]));
                 for line in text.lines() {
                     all_lines.push(Line::from(vec![
-                        Span::raw("  "),
-                        Span::styled(line.to_string(), Style::default().fg(USER_COLOR)),
+                        Span::raw("    "),
+                        Span::styled(line.to_string(), Style::default().fg(TEXT_PRIMARY)),
                     ]));
                 }
             }
-            ChatMessage::AssistantText(text) => {
+            ChatMessage::AssistantText { text, model, timestamp } => {
                 all_lines.push(Line::from(""));
-                let md_lines = markdown::markdown_to_lines(text);
+                let model_short = shorten_model(model);
+                let ts = timestamp.format("%H:%M").to_string();
+                let badge_len = 4 + model_short.len() + 2 + ts.len();
+                let ts_pad = (area.width as usize).saturating_sub(badge_len);
+                all_lines.push(Line::from(vec![
+                    Span::styled("  ◈ ", Style::default().fg(ACCENT_PRIMARY)),
+                    Span::styled(model_short, Style::default().fg(TEXT_SECONDARY).add_modifier(Modifier::BOLD)),
+                    Span::styled(" ".repeat(ts_pad), Style::default()),
+                    Span::styled(ts, Style::default().fg(TEXT_MUTED)),
+                ]));
+                let md_lines = markdown::markdown_to_lines(text, area.width);
                 for line in md_lines {
                     let mut prefixed: Vec<Span<'static>> = vec![Span::raw("  ")];
                     prefixed.extend(line.spans);
@@ -148,68 +168,55 @@ fn render_chat(f: &mut Frame, app: &mut App, area: Rect) {
             }
             ChatMessage::AssistantLive(text) => {
                 all_lines.push(Line::from(""));
-                let md_lines = markdown::markdown_to_lines(text);
+                all_lines.push(Line::from(vec![
+                    Span::styled("  ◈ ", Style::default().fg(ACCENT_PRIMARY)),
+                    Span::styled("generating…", Style::default().fg(TEXT_MUTED).add_modifier(Modifier::ITALIC)),
+                ]));
+                let md_lines = markdown::markdown_to_lines(text, area.width);
                 for (i, line) in md_lines.iter().enumerate() {
                     let mut prefixed: Vec<Span<'static>> = vec![Span::raw("  ")];
                     prefixed.extend(line.spans.clone());
-                    // Append live cursor to last line.
                     if i == md_lines.len() - 1 {
                         prefixed.push(Span::styled(
                             "▊",
-                            Style::default().fg(Color::Magenta).add_modifier(Modifier::SLOW_BLINK),
+                            Style::default().fg(ACCENT_PRIMARY).add_modifier(Modifier::SLOW_BLINK),
                         ));
                     }
                     all_lines.push(Line::from(prefixed));
                 }
             }
-            ChatMessage::ToolCall {
-                name,
-                input_summary,
-                success,
-                output,
-                expanded,
-            } => {
-                let status_color = match success {
-                    Some(true) => TOOL_SUCCESS,
-                    Some(false) => TOOL_FAIL,
-                    None => TOOL_COLOR,
+            ChatMessage::ToolCall { name, input_summary, success, output, expanded, timestamp } => {
+                let (status_color, status_icon) = match success {
+                    Some(true)  => (TOOL_SUCCESS, "✓"),
+                    Some(false) => (TOOL_FAIL,    "✗"),
+                    None        => (TOOL_COLOR,   "●"),
                 };
-                let status = match success {
-                    Some(true) => "✓",
-                    Some(false) => "✗",
-                    None => "●",
-                };
-                let toggle_indicator = if *expanded { "▼" } else { "▶" };
+                let toggle = if *expanded { "▼" } else { "▶" };
+                let ts = timestamp.format("%H:%M").to_string();
+                let header_left_len = 6 + name.len() + 1 + input_summary.len() + 2 + 1;
+                let ts_pad = (area.width as usize).saturating_sub(header_left_len + ts.len());
                 all_lines.push(Line::from(vec![
-                    Span::styled(
-                        format!("  {toggle_indicator}  "),
-                        Style::default().fg(DIM),
-                    ),
-                    Span::styled(
-                        name.clone(),
-                        Style::default()
-                            .fg(TOOL_COLOR)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    Span::styled(
-                        format!(" {input_summary}"),
-                        Style::default().fg(DIM),
-                    ),
-                    Span::raw("  "),
-                    Span::styled(
-                        status.to_string(),
-                        Style::default().fg(status_color),
-                    ),
+                    Span::styled(format!("  {toggle}  "), Style::default().fg(TEXT_MUTED)),
+                    Span::styled(name.clone(), Style::default().fg(TOOL_COLOR).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!("  {input_summary}"), Style::default().fg(TEXT_MUTED)),
+                    Span::styled(" ".repeat(ts_pad.max(2)), Style::default()),
+                    Span::styled(status_icon.to_string(), Style::default().fg(status_color)),
+                    Span::styled("  ", Style::default()),
+                    Span::styled(ts, Style::default().fg(TEXT_MUTED)),
                 ]));
-                // Show output only if expanded
                 if *expanded {
                     if let Some(out) = output {
-                        let out_lines: Vec<&str> = out.lines().collect();
-                        for line in out_lines {
+                        all_lines.push(Line::from(vec![
+                            Span::styled(
+                                format!("     {}", "─".repeat((area.width as usize).saturating_sub(7))),
+                                Style::default().fg(BORDER_DIM),
+                            ),
+                        ]));
+                        for line in out.lines() {
                             all_lines.push(Line::from(vec![
                                 Span::styled(
                                     format!("     {}", line),
-                                    Style::default().fg(DIM),
+                                    Style::default().fg(TEXT_SECONDARY),
                                 ),
                             ]));
                         }
@@ -219,28 +226,22 @@ fn render_chat(f: &mut Frame, app: &mut App, area: Rect) {
             ChatMessage::System(text) => {
                 for line in text.lines() {
                     all_lines.push(Line::from(vec![
-                        Span::styled(
-                            format!("  {line}"),
-                            Style::default().fg(SYSTEM_COLOR).add_modifier(Modifier::ITALIC),
-                        ),
+                        Span::styled("  ℹ ", Style::default().fg(INFO)),
+                        Span::styled(line.to_string(), Style::default().fg(TEXT_SECONDARY)),
                     ]));
                 }
             }
             ChatMessage::Error(text) => {
                 all_lines.push(Line::from(vec![
-                    Span::styled(
-                        format!("  Error: {text}"),
-                        Style::default()
-                            .fg(ERROR_COLOR)
-                            .add_modifier(Modifier::BOLD),
-                    ),
+                    Span::styled("  ✖ ", Style::default().fg(ERROR_COLOR)),
+                    Span::styled(text.clone(), Style::default().fg(ERROR_COLOR).add_modifier(Modifier::BOLD)),
                 ]));
             }
         }
 
         // Add selection highlight gutter to first line of selected message
         if is_selected && msg_start_line < all_lines.len() {
-            let mut line = all_lines[msg_start_line].clone();
+            let line = all_lines[msg_start_line].clone();
             let gutter = Span::styled("▌ ", Style::default().fg(Color::Rgb(100, 100, 160)));
             let mut new_spans = vec![gutter];
             new_spans.extend(line.spans);
@@ -254,11 +255,10 @@ fn render_chat(f: &mut Frame, app: &mut App, area: Rect) {
         let dots = ".".repeat((app.thinking_dots % 4) + 1);
         all_lines.push(Line::from(""));
         all_lines.push(Line::from(vec![
+            Span::styled("  ◈ ", Style::default().fg(ACCENT_PRIMARY)),
             Span::styled(
-                format!("  Thinking{dots}"),
-                Style::default()
-                    .fg(Color::Magenta)
-                    .add_modifier(Modifier::ITALIC),
+                format!("thinking{dots}"),
+                Style::default().fg(TEXT_MUTED).add_modifier(Modifier::ITALIC),
             ),
         ]));
     }
@@ -288,7 +288,7 @@ fn render_chat(f: &mut Frame, app: &mut App, area: Rect) {
                 .position(app.scroll_offset as usize)
                 .viewport_content_length(visible_height as usize);
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .style(Style::default().fg(BORDER_COLOR));
+            .style(Style::default().fg(BORDER_DIM));
         f.render_stateful_widget(scrollbar, area, &mut scrollbar_state);
     }
 }
@@ -298,11 +298,7 @@ fn render_chat(f: &mut Frame, app: &mut App, area: Rect) {
 fn render_input(f: &mut Frame, app: &App, area: Rect) {
     let is_processing = matches!(app.mode, AppMode::Processing | AppMode::Confirm(_));
 
-    let border_color = if is_processing {
-        Color::DarkGray
-    } else {
-        BORDER_COLOR
-    };
+    let border_color = if is_processing { ACCENT_DIM } else { BORDER_ACCENT };
 
     // Count newlines for the line badge.
     let line_count = app.input.chars().filter(|&c| c == '\n').count() + 1;
@@ -314,50 +310,49 @@ fn render_input(f: &mut Frame, app: &App, area: Rect) {
 
     let title = if is_processing {
         if app.input_queue.is_empty() {
-            " Processing... (ESC to clear queue) ".to_string()
+            " Processing… (ESC to clear queue) ".to_string()
         } else {
-            format!(" Processing... {} queued ", app.input_queue.len())
+            format!(" Processing… {} queued ", app.input_queue.len())
         }
     } else {
         let history_pos = app.get_history_position_text();
         format!(" >{}{} ", history_pos, line_badge)
     };
 
+    let title_color = if is_processing { TEXT_MUTED } else { TEXT_SECONDARY };
+    let hint = " ⌥↵ newline · ↑↓ history · ?=help ";
+
     let input_block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(border_color))
         .title(title)
-        .title_style(Style::default().fg(if is_processing {
-            Color::DarkGray
-        } else {
-            Color::Cyan
-        }));
+        .title_style(Style::default().fg(title_color))
+        .title_bottom(Line::from(Span::styled(hint, Style::default().fg(TEXT_MUTED))));
 
     let input_widget = if app.input.is_empty() && !is_processing {
         Paragraph::new(Line::from(Span::styled(
-            "Type your prompt or /help for commands... (Shift/Alt+Enter for newline)",
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::DIM),
+            "Type your prompt…",
+            Style::default().fg(TEXT_MUTED),
         )))
         .block(input_block)
-        .style(Style::default().fg(Color::White))
+        .style(Style::default().fg(TEXT_PRIMARY))
         .wrap(Wrap { trim: false })
     } else {
         let input_text = if app.input.contains('\n') {
-            // Multi-line: no ghost hint, just render as-is.
             Line::from(Span::raw(app.input.clone()))
         } else if let Some(hint) = get_command_hints(&app.input) {
             let typed = &app.input;
             let untyped = &hint[typed.len()..];
             Line::from(vec![
-                Span::styled(typed.to_string(), Style::default().fg(Color::White)),
-                Span::styled(untyped.to_string(), Style::default().fg(Color::DarkGray).add_modifier(Modifier::DIM)),
+                Span::styled(typed.to_string(), Style::default().fg(TEXT_PRIMARY)),
+                Span::styled(untyped.to_string(), Style::default().fg(TEXT_MUTED)),
             ])
         } else {
             Line::from(Span::raw(app.input.clone()))
         };
         Paragraph::new(input_text)
             .block(input_block)
-            .style(Style::default().fg(Color::White))
+            .style(Style::default().fg(TEXT_PRIMARY))
             .wrap(Wrap { trim: false })
     };
 
@@ -401,60 +396,56 @@ fn fmt_k(n: u32) -> String {
 }
 
 fn render_status(f: &mut Frame, app: &App, area: Rect) {
-    let commands = " /help  /model  /settings  /clear  /import │ PgUp/Dn C-c×2=quit ";
-
     // Context token estimate with color.
     let ctx_estimate = app.context_token_estimate();
     let ctx_color = if ctx_estimate > 90_000 {
-        Color::Red
+        ERROR_COLOR
     } else if ctx_estimate > 60_000 {
-        Color::Yellow
+        Color::Rgb(220, 170, 50)
     } else {
-        Color::Green
+        SUCCESS
     };
-    let ctx_str = fmt_k(ctx_estimate as u32);
 
-    // Token usage display.
-    let token_info = if app.last_turn_in > 0 || app.last_turn_out > 0 {
-        format!(
-            "ctx ~{}K | ↑{} ↓{} tok",
-            ctx_str,
-            fmt_k(app.last_turn_in),
-            fmt_k(app.last_turn_out),
-        )
+    let ctx_str = fmt_k(ctx_estimate as u32);
+    let turn_str = if app.last_turn_in > 0 || app.last_turn_out > 0 {
+        format!("  ↑{}  ↓{}", fmt_k(app.last_turn_in), fmt_k(app.last_turn_out))
     } else {
-        format!("ctx ~{}K", ctx_str)
+        String::new()
     };
+    let ctx_display = format!(" ctx {}K{}", ctx_str, turn_str);
 
     let status = &app.status_message;
-    let status_with_indicator = if let Some(ts) = app.status_timestamp {
+    let (status_str, status_color) = if let Some(ts) = app.status_timestamp {
         let elapsed = ts.elapsed().as_millis() as u64;
         let remaining = (3000u64).saturating_sub(elapsed);
-        let dots = if remaining > 2000 { "●" } else if remaining > 1000 { "○" } else { "·" };
-        format!("{} {}", status, dots)
+        let dot = if remaining > 2000 { "●" } else if remaining > 1000 { "○" } else { "·" };
+        (format!("{}  {}", dot, status), SUCCESS)
+    } else if status.is_empty() || status == "Ready" {
+        ("● Ready".to_string(), SUCCESS)
     } else {
-        status.clone()
+        (format!("● {}", status), TEXT_SECONDARY)
     };
 
-    let right_section = format!("{} │ {} ", token_info, status_with_indicator);
-    let padding = (area.width as usize)
-        .saturating_sub(commands.len() + right_section.len());
+    let sep = Span::styled("  │  ", Style::default().fg(BORDER_DIM).bg(STATUS_BG));
+    let help_hint = Span::styled("?=help ", Style::default().fg(TEXT_MUTED).bg(STATUS_BG));
+
+    // Build left side: ctx info
+    let left = Span::styled(ctx_display.clone(), Style::default().fg(ctx_color).bg(STATUS_BG));
+    // Build right side: status + help
+    let right_text = format!("  {}  ", status_str);
+    let right_len = right_text.len() + 7; // "?=help " = 7
+    let left_len = ctx_display.len() + 3; // sep = 3
+    let gap = (area.width as usize).saturating_sub(left_len + right_len);
 
     let status_line = Line::from(vec![
-        Span::styled(commands, Style::default().fg(DIM).bg(STATUS_BG)),
-        Span::styled(" ".repeat(padding), Style::default().bg(STATUS_BG)),
-        Span::styled(
-            format!("{} │ ", token_info),
-            Style::default().fg(ctx_color).bg(STATUS_BG),
-        ),
-        Span::styled(
-            format!("{} ", status_with_indicator),
-            Style::default().fg(Color::Green).bg(STATUS_BG),
-        ),
+        left,
+        sep,
+        Span::styled(" ".repeat(gap), Style::default().bg(STATUS_BG)),
+        Span::styled(right_text, Style::default().fg(status_color).bg(STATUS_BG)),
+        help_hint,
     ]);
 
-    let status_widget = Paragraph::new(status_line).style(Style::default().bg(STATUS_BG));
-    f.render_widget(status_widget, area);
+    f.render_widget(Paragraph::new(status_line).style(Style::default().bg(STATUS_BG)), area);
 }
 
 // ── Confirm overlay ──────────────────────────────────────────────────────────
@@ -516,10 +507,6 @@ fn render_confirm_overlay(f: &mut Frame, state: ConfirmState, area: Rect) {
 }
 
 // ── Settings overlay ─────────────────────────────────────────────────────────
-
-const POPUP_BG: Color = Color::Rgb(18, 18, 32);
-const POPUP_BORDER: Color = Color::Rgb(100, 100, 160);
-const POPUP_TITLE: Color = Color::Rgb(130, 180, 255);
 
 fn render_settings_overlay(f: &mut Frame, state: SettingsState, area: Rect) {
     let width = 72u16.min(area.width.saturating_sub(4));
@@ -813,6 +800,19 @@ fn compute_wrapped_height(lines: &[Line], width: u16) -> u16 {
         }
     }
     total
+}
+
+fn shorten_model(model: &str) -> String {
+    // Strip common prefixes for compact badge display
+    let s = model
+        .trim_start_matches("claude-")
+        .trim_start_matches("anthropic/claude-")
+        .trim_start_matches("openai/")
+        .trim_start_matches("gpt-")
+        .trim_start_matches("gemini-");
+    // Replace long version suffixes like "-20251001"
+    let s = if let Some(pos) = s.rfind("-202") { &s[..pos] } else { s };
+    s.to_string()
 }
 
 fn shorten_path(path: &str, max_len: usize) -> String {
