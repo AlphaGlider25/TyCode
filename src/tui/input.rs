@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 use tokio::sync::mpsc;
 
 use super::app::{App, AppMode, ChatMessage, ModelSelectState, ProviderSelectState, SettingsState};
@@ -691,5 +691,31 @@ fn handle_model_select_key(app: &mut App, key: KeyEvent) {
         app.messages
             .push(ChatMessage::System(format!("Model set to: {model}")));
         app.set_status(&format!("Model: {model}"));
+    }
+}
+
+/// Handle mouse events (scroll only for now).
+pub fn handle_mouse(app: &mut App, mouse: MouseEvent) {
+    // Only handle scroll events when not in overlay modes.
+    match &app.mode {
+        AppMode::Settings(_) | AppMode::Help | AppMode::ModelSelect(_) | AppMode::ProviderSelect(_) | AppMode::Confirm(_) => {
+            // Don't scroll chat while in overlay
+            return;
+        }
+        _ => {}
+    }
+
+    match mouse.kind {
+        MouseEventKind::ScrollUp => {
+            // Scroll chat up (decrease offset to see earlier messages)
+            app.scroll_offset = app.scroll_offset.saturating_sub(3);
+            app.auto_scroll = false;
+        }
+        MouseEventKind::ScrollDown => {
+            // Scroll chat down (increase offset to see later messages)
+            app.scroll_offset = app.scroll_offset.saturating_add(3);
+            app.auto_scroll = false;
+        }
+        _ => {}
     }
 }

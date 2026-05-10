@@ -117,6 +117,9 @@ async fn run_app(
                 Event::Key(key) if key.kind == KeyEventKind::Press => {
                     input::handle_key(&mut app, key, &user_tx).await;
                 }
+                Event::Mouse(mouse) => {
+                    input::handle_mouse(&mut app, mouse);
+                }
                 _ => {}
             }
         }
