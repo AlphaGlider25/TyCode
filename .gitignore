@@ -1,4 +1,6 @@
 /target
+/bin
+node_modules/
 
 # AI session files
 DISGRACE.md

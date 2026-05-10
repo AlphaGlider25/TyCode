@@ -1,23 +1,13 @@
-#!/usr/bin/env node
-
-/**
- * Pre-uninstall script
- * Cleans up downloaded binaries
- */
-
 const fs = require('fs');
 const path = require('path');
 
-function cleanup() {
-  try {
-    const binariesDir = path.join(__dirname, '..', 'bin', 'binaries');
-    if (fs.existsSync(binariesDir)) {
-      fs.rmSync(binariesDir, { recursive: true, force: true });
-      console.log('[TyCode] Cleanup complete');
-    }
-  } catch (error) {
-    console.warn(`[TyCode] Warning: Failed to cleanup: ${error.message}`);
+try {
+  const binDir = path.join(__dirname, '..', 'bin');
+  if (fs.existsSync(binDir)) {
+    fs.rmSync(binDir, { recursive: true, force: true });
+    console.log('✓ Binary removed');
   }
+} catch (err) {
+  console.error('✗ Uninstall failed:', err.message);
+  process.exit(1);
 }
-
-cleanup();
