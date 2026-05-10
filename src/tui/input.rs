@@ -177,6 +177,32 @@ async fn handle_processing_key(
         KeyCode::End => {
             app.cursor_pos = app.input.len();
         }
+        KeyCode::Up if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            let len = app.messages.len();
+            if len == 0 {
+                return;
+            }
+            app.selected_message = Some(match app.selected_message {
+                None | Some(0) => len - 1,
+                Some(i) => i - 1,
+            });
+            app.auto_scroll = false;
+        }
+        KeyCode::Down if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            let len = app.messages.len();
+            app.selected_message = match app.selected_message {
+                None => None,
+                Some(i) if i + 1 >= len => None,
+                Some(i) => Some(i + 1),
+            };
+        }
+        KeyCode::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            if let Some(idx) = app.selected_message {
+                if let Some(ChatMessage::ToolCall { expanded, .. }) = app.messages.get_mut(idx) {
+                    *expanded = !*expanded;
+                }
+            }
+        }
         KeyCode::Up => {
             app.history_up();
         }
@@ -216,6 +242,7 @@ async fn handle_normal_key(
             app.add_to_history(input.clone());
             app.input.clear();
             app.cursor_pos = 0;
+            app.selected_message = None;
 
             if input.starts_with('/') {
                 handle_command(app, &input).await;
@@ -288,11 +315,42 @@ async fn handle_normal_key(
             app.cursor_pos = app.input.len();
             true
         }
+        KeyCode::Up if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            let len = app.messages.len();
+            if len == 0 {
+                return true;
+            }
+            app.selected_message = Some(match app.selected_message {
+                None | Some(0) => len - 1,
+                Some(i) => i - 1,
+            });
+            app.auto_scroll = false;
+            true
+        }
+        KeyCode::Down if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            let len = app.messages.len();
+            app.selected_message = match app.selected_message {
+                None => None,
+                Some(i) if i + 1 >= len => None,
+                Some(i) => Some(i + 1),
+            };
+            true
+        }
+        KeyCode::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            if let Some(idx) = app.selected_message {
+                if let Some(ChatMessage::ToolCall { expanded, .. }) = app.messages.get_mut(idx) {
+                    *expanded = !*expanded;
+                }
+            }
+            true
+        }
         KeyCode::Up => {
+            app.selected_message = None;
             app.history_up();
             true
         }
         KeyCode::Down => {
+            app.selected_message = None;
             app.history_down();
             true
         }
@@ -391,7 +449,7 @@ async fn handle_command(app: &mut App, cmd: &str) {
                     ChatMessage::AssistantText(s) | ChatMessage::AssistantLive(s) => format!("Assistant: {}", s),
                     ChatMessage::System(s) => format!("System: {}", s),
                     ChatMessage::Error(s) => format!("Error: {}", s),
-                    ChatMessage::ToolCall { name, input_summary, success, output } => {
+                    ChatMessage::ToolCall { name, input_summary, success, output, .. } => {
                         format!(
                             "Tool: {} (input: {}) [{}]{}",
                             name, input_summary,

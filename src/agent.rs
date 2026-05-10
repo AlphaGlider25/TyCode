@@ -216,7 +216,6 @@ impl Agent {
         self.messages.push(Message::user(&user_prompt));
 
         let max_iterations = config.max_iterations;
-        let task_done = false;
         let mut total_in: u32 = 0;
         let mut total_out: u32 = 0;
 
@@ -311,23 +310,11 @@ impl Agent {
             }
 
             match response.stop_reason {
-                StopReason::MaxTokens => {
-                    let _ = event_tx.send(AgentEvent::Error(
-                        "Response truncated (max tokens reached). Send another message to continue.".into(),
-                    ));
-                    break 'agent;
-                }
-                StopReason::Error => {
+                StopReason::MaxTokens | StopReason::Error => {
                     break 'agent;
                 }
                 _ => {}
             }
-        }
-
-        if !task_done {
-            let _ = event_tx.send(AgentEvent::Compacted(format!(
-                "Reached iteration limit ({max_iterations}). Send another message to continue."
-            )));
         }
 
         let _ = event_tx.send(AgentEvent::Done { tokens_in: total_in, tokens_out: total_out });

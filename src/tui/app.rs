@@ -20,6 +20,7 @@ pub enum ChatMessage {
         input_summary: String,
         success: Option<bool>,
         output: Option<String>,
+        expanded: bool,
     },
     System(String),
     Error(String),
@@ -173,6 +174,7 @@ pub struct App {
     pub messages: Vec<ChatMessage>,
     pub scroll_offset: u16,
     pub auto_scroll: bool,
+    pub selected_message: Option<usize>,
 
     // Input
     pub input: String,
@@ -219,6 +221,7 @@ impl App {
             ))],
             scroll_offset: 0,
             auto_scroll: true,
+            selected_message: None,
             input: String::new(),
             cursor_pos: 0,
             input_history: VecDeque::with_capacity(100),
@@ -283,6 +286,7 @@ impl App {
                     input_summary: summarize_input(&input),
                     success: None,
                     output: None,
+                    expanded: false,
                 });
                 if self.auto_scroll {
                     self.scroll_to_bottom();

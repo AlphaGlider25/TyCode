@@ -114,7 +114,10 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
 fn render_chat(f: &mut Frame, app: &mut App, area: Rect) {
     let mut all_lines: Vec<Line<'static>> = Vec::new();
 
-    for msg in &app.messages {
+    for (msg_idx, msg) in app.messages.iter().enumerate() {
+        let msg_start_line = all_lines.len();
+        let is_selected = app.selected_message == Some(msg_idx);
+
         match msg {
             ChatMessage::User(text) => {
                 all_lines.push(Line::from(""));
@@ -164,21 +167,23 @@ fn render_chat(f: &mut Frame, app: &mut App, area: Rect) {
                 input_summary,
                 success,
                 output,
+                expanded,
             } => {
-                let bullet_color = match success {
+                let status_color = match success {
                     Some(true) => TOOL_SUCCESS,
                     Some(false) => TOOL_FAIL,
                     None => TOOL_COLOR,
                 };
-                let bullet = match success {
+                let status = match success {
                     Some(true) => "✓",
                     Some(false) => "✗",
                     None => "●",
                 };
+                let toggle_indicator = if *expanded { "▼" } else { "▶" };
                 all_lines.push(Line::from(vec![
                     Span::styled(
-                        format!("  {bullet} "),
-                        Style::default().fg(bullet_color),
+                        format!("  {toggle_indicator}  "),
+                        Style::default().fg(DIM),
                     ),
                     Span::styled(
                         name.clone(),
@@ -190,27 +195,24 @@ fn render_chat(f: &mut Frame, app: &mut App, area: Rect) {
                         format!(" {input_summary}"),
                         Style::default().fg(DIM),
                     ),
+                    Span::raw("  "),
+                    Span::styled(
+                        status.to_string(),
+                        Style::default().fg(status_color),
+                    ),
                 ]));
-                if let Some(out) = output {
-                    let max_lines = 15;
-                    let out_lines: Vec<&str> = out.lines().collect();
-                    let mut i = 0;
-                    while i < out_lines.len() && i < max_lines {
-                        all_lines.push(Line::from(vec![
-                            Span::styled(
-                                format!("    {}", out_lines[i]),
-                                Style::default().fg(DIM),
-                            ),
-                        ]));
-                        i += 1;
-                    }
-                    if out_lines.len() > max_lines {
-                        all_lines.push(Line::from(vec![
-                            Span::styled(
-                                format!("    ...(showing {max_lines} of {} lines)", out_lines.len()),
-                                Style::default().fg(DIM),
-                            ),
-                        ]));
+                // Show output only if expanded
+                if *expanded {
+                    if let Some(out) = output {
+                        let out_lines: Vec<&str> = out.lines().collect();
+                        for line in out_lines {
+                            all_lines.push(Line::from(vec![
+                                Span::styled(
+                                    format!("     {}", line),
+                                    Style::default().fg(DIM),
+                                ),
+                            ]));
+                        }
                     }
                 }
             }
@@ -234,6 +236,15 @@ fn render_chat(f: &mut Frame, app: &mut App, area: Rect) {
                     ),
                 ]));
             }
+        }
+
+        // Add selection highlight gutter to first line of selected message
+        if is_selected && msg_start_line < all_lines.len() {
+            let mut line = all_lines[msg_start_line].clone();
+            let gutter = Span::styled("▌ ", Style::default().fg(Color::Rgb(100, 100, 160)));
+            let mut new_spans = vec![gutter];
+            new_spans.extend(line.spans);
+            all_lines[msg_start_line] = Line::from(new_spans);
         }
     }
 
