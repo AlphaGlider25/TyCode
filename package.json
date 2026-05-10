@@ -1,6 +1,6 @@
 {
   "name": "@eronic-company/tycode",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "TyCode — AI system agent with a TUI that works with any LLM provider",
   "license": "GPL-3.0",
   "main": "index.js",
