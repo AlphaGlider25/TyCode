@@ -121,8 +121,8 @@ async fn handle_processing_key(
             app.set_status("Queue cleared");
         }
         KeyCode::Enter => {
-            if key.modifiers.contains(KeyModifiers::SHIFT) {
-                // Shift+Enter: insert newline
+            if key.modifiers.contains(KeyModifiers::SHIFT) || key.modifiers.contains(KeyModifiers::ALT) {
+                // Shift+Enter or Alt+Enter: insert newline
                 app.input.insert(app.cursor_pos, '\n');
                 app.cursor_pos += 1;
             } else {
@@ -201,8 +201,8 @@ async fn handle_normal_key(
 ) -> bool {
     match key.code {
         KeyCode::Enter => {
-            if key.modifiers.contains(KeyModifiers::SHIFT) {
-                // Shift+Enter inserts a newline without submitting.
+            if key.modifiers.contains(KeyModifiers::SHIFT) || key.modifiers.contains(KeyModifiers::ALT) {
+                // Shift+Enter or Alt+Enter inserts a newline without submitting.
                 app.input.insert(app.cursor_pos, '\n');
                 app.cursor_pos += 1;
                 return true;

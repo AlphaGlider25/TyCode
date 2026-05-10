@@ -324,7 +324,7 @@ fn render_input(f: &mut Frame, app: &App, area: Rect) {
 
     let input_widget = if app.input.is_empty() && !is_processing {
         Paragraph::new(Line::from(Span::styled(
-            "Type your prompt or /help for commands... (Shift+Enter for newline)",
+            "Type your prompt or /help for commands... (Shift/Alt+Enter for newline)",
             Style::default().fg(Color::Cyan).add_modifier(Modifier::DIM),
         )))
         .block(input_block)
@@ -629,7 +629,7 @@ fn render_help_overlay(f: &mut Frame, area: Rect) {
         Line::from(vec![Span::styled("  Keyboard & Navigation", section)]),
         Line::from(""),
         Line::from(vec![Span::styled("  Enter             ", cmd), Span::styled("Send message", desc)]),
-        Line::from(vec![Span::styled("  Shift+Enter       ", cmd), Span::styled("Insert newline (multiline input)", desc)]),
+        Line::from(vec![Span::styled("  Shift/Alt+Enter   ", cmd), Span::styled("Insert newline (multiline input)", desc)]),
         Line::from(vec![Span::styled("  Ctrl+Backspace    ", cmd), Span::styled("Delete previous word", desc)]),
         Line::from(vec![Span::styled("  Ctrl+C            ", cmd), Span::styled("Cancel/clear (×2 within 2s to quit)", desc)]),
         Line::from(vec![Span::styled("  Up / Down         ", cmd), Span::styled("Navigate input history", desc)]),
@@ -644,7 +644,7 @@ fn render_help_overlay(f: &mut Frame, area: Rect) {
         Line::from(vec![Span::styled("  While Processing", section)]),
         Line::from(""),
         Line::from(vec![Span::styled("  Enter             ", cmd), Span::styled("Queue additional instructions", desc)]),
-        Line::from(vec![Span::styled("  Shift+Enter       ", cmd), Span::styled("Insert newline in queued message", desc)]),
+        Line::from(vec![Span::styled("  Shift/Alt+Enter   ", cmd), Span::styled("Insert newline in queued message", desc)]),
         Line::from(vec![Span::styled("  Esc               ", cmd), Span::styled("Clear queue (agent task continues)", desc)]),
         Line::from(""),
         Line::from(vec![Span::styled("  Dangerous commands prompt for Y/N confirmation before executing.", dim)]),
